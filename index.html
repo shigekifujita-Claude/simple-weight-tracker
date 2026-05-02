@@ -1,0 +1,448 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>体重管理アプリ</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Hiragino Sans", sans-serif;
+      background: #f0f4f8;
+      color: #333;
+      min-height: 100vh;
+    }
+
+    header {
+      background: #1565C0;
+      color: #fff;
+      padding: 16px 20px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+    }
+    header h1 { font-size: 1.25rem; font-weight: 700; }
+    header .icon { font-size: 1.5rem; }
+
+    main {
+      max-width: 800px;
+      margin: 24px auto;
+      padding: 0 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    .card {
+      background: #fff;
+      border-radius: 12px;
+      padding: 20px;
+      box-shadow: 0 1px 6px rgba(0,0,0,0.08);
+    }
+    .card h2 {
+      font-size: 1rem;
+      font-weight: 700;
+      color: #1565C0;
+      margin-bottom: 16px;
+      padding-bottom: 8px;
+      border-bottom: 2px solid #e3f0ff;
+    }
+
+    /* 設定 */
+    .setting-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .setting-row label { font-size: 0.9rem; color: #555; }
+    .setting-row input {
+      width: 100px;
+      padding: 6px 10px;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      font-size: 0.95rem;
+    }
+    .setting-row button {
+      padding: 6px 16px;
+      background: #1565C0;
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 0.9rem;
+    }
+    .setting-row button:hover { background: #1251a0; }
+    #bmi-display {
+      margin-top: 10px;
+      font-size: 0.9rem;
+      color: #555;
+    }
+    #bmi-value {
+      font-size: 1.4rem;
+      font-weight: 700;
+      color: #1565C0;
+    }
+    #bmi-label {
+      margin-left: 8px;
+      font-weight: 600;
+    }
+
+    /* 入力フォーム */
+    .input-row {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .input-row input {
+      flex: 1;
+      min-width: 120px;
+      padding: 10px 12px;
+      border: 1px solid #ccc;
+      border-radius: 8px;
+      font-size: 1rem;
+    }
+    .input-row input:focus {
+      outline: none;
+      border-color: #1565C0;
+      box-shadow: 0 0 0 3px rgba(21,101,192,0.15);
+    }
+    .btn-primary {
+      padding: 10px 24px;
+      background: #1565C0;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .btn-primary:hover { background: #1251a0; }
+
+    /* グラフ */
+    .chart-wrap { position: relative; height: 240px; }
+
+    /* 統計 */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+      gap: 12px;
+    }
+    .stat-item {
+      background: #f0f4f8;
+      border-radius: 8px;
+      padding: 12px;
+      text-align: center;
+    }
+    .stat-item .label { font-size: 0.75rem; color: #777; margin-bottom: 4px; }
+    .stat-item .value { font-size: 1.2rem; font-weight: 700; color: #1565C0; }
+
+    /* 記録一覧 */
+    .record-list { display: flex; flex-direction: column; gap: 8px; max-height: 300px; overflow-y: auto; }
+    .record-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 14px;
+      background: #f8fbff;
+      border-radius: 8px;
+      border: 1px solid #e3f0ff;
+    }
+    .record-item .date { font-size: 0.85rem; color: #777; }
+    .record-item .weight { font-size: 1.05rem; font-weight: 700; color: #333; }
+    .record-item .diff { font-size: 0.85rem; margin-left: 8px; }
+    .diff-up { color: #e53935; }
+    .diff-down { color: #43a047; }
+    .btn-del {
+      background: none;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      padding: 4px 10px;
+      font-size: 0.8rem;
+      color: #999;
+      cursor: pointer;
+    }
+    .btn-del:hover { border-color: #e53935; color: #e53935; }
+
+    .empty-msg { text-align: center; color: #aaa; font-size: 0.9rem; padding: 20px 0; }
+
+    @media (max-width: 480px) {
+      .input-row { flex-direction: column; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <span class="icon">⚖️</span>
+  <h1>体重管理アプリ</h1>
+</header>
+
+<main>
+
+  <!-- 身長設定 & BMI -->
+  <div class="card">
+    <h2>設定 / BMI</h2>
+    <div class="setting-row">
+      <label>身長</label>
+      <input type="number" id="height-input" placeholder="170" min="100" max="250" step="0.1"> cm
+      <button onclick="saveHeight()">保存</button>
+    </div>
+    <div id="bmi-display" style="display:none; margin-top:12px;">
+      最新BMI：<span id="bmi-value">--</span>
+      <span id="bmi-label"></span>
+    </div>
+  </div>
+
+  <!-- 体重入力 -->
+  <div class="card">
+    <h2>体重を記録</h2>
+    <div class="input-row">
+      <input type="date" id="date-input">
+      <input type="number" id="weight-input" placeholder="例：65.5" min="20" max="300" step="0.1"> kg
+      <button class="btn-primary" onclick="addRecord()">追加</button>
+    </div>
+  </div>
+
+  <!-- グラフ -->
+  <div class="card">
+    <h2>体重推移グラフ</h2>
+    <div class="chart-wrap">
+      <canvas id="weightChart"></canvas>
+    </div>
+  </div>
+
+  <!-- 統計 -->
+  <div class="card">
+    <h2>統計</h2>
+    <div class="stats-grid">
+      <div class="stat-item">
+        <div class="label">最新</div>
+        <div class="value" id="stat-latest">--</div>
+      </div>
+      <div class="stat-item">
+        <div class="label">最小</div>
+        <div class="value" id="stat-min">--</div>
+      </div>
+      <div class="stat-item">
+        <div class="label">最大</div>
+        <div class="value" id="stat-max">--</div>
+      </div>
+      <div class="stat-item">
+        <div class="label">平均</div>
+        <div class="value" id="stat-avg">--</div>
+      </div>
+      <div class="stat-item">
+        <div class="label">記録数</div>
+        <div class="value" id="stat-count">0</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 記録一覧 -->
+  <div class="card">
+    <h2>記録一覧</h2>
+    <div class="record-list" id="record-list">
+      <div class="empty-msg">まだ記録がありません</div>
+    </div>
+  </div>
+
+</main>
+
+<script>
+  const STORAGE_KEY = 'weight_records';
+  const HEIGHT_KEY  = 'user_height';
+
+  let chart = null;
+
+  // ── 初期化 ──────────────────────────────────────
+  function init() {
+    const today = new Date().toISOString().split('T')[0];
+    document.getElementById('date-input').value = today;
+
+    const h = localStorage.getItem(HEIGHT_KEY);
+    if (h) document.getElementById('height-input').value = h;
+
+    render();
+  }
+
+  // ── データ取得 ───────────────────────────────────
+  function getRecords() {
+    return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]')
+      .sort((a, b) => a.date.localeCompare(b.date));
+  }
+
+  function saveRecords(records) {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(records));
+  }
+
+  // ── 追加 ─────────────────────────────────────────
+  function addRecord() {
+    const date   = document.getElementById('date-input').value;
+    const weight = parseFloat(document.getElementById('weight-input').value);
+
+    if (!date) { alert('日付を選択してください'); return; }
+    if (isNaN(weight) || weight <= 0) { alert('正しい体重を入力してください'); return; }
+
+    const records = getRecords();
+    const existing = records.findIndex(r => r.date === date);
+    if (existing >= 0) {
+      if (!confirm(`${date} のデータが既にあります。上書きしますか？`)) return;
+      records[existing].weight = weight;
+    } else {
+      records.push({ date, weight });
+    }
+    saveRecords(records);
+    document.getElementById('weight-input').value = '';
+    render();
+  }
+
+  // ── 削除 ─────────────────────────────────────────
+  function deleteRecord(date) {
+    const records = getRecords().filter(r => r.date !== date);
+    saveRecords(records);
+    render();
+  }
+
+  // ── 身長保存 ─────────────────────────────────────
+  function saveHeight() {
+    const h = parseFloat(document.getElementById('height-input').value);
+    if (isNaN(h) || h < 100 || h > 250) { alert('正しい身長を入力してください (100〜250 cm)'); return; }
+    localStorage.setItem(HEIGHT_KEY, h);
+    render();
+  }
+
+  // ── BMI ──────────────────────────────────────────
+  function calcBMI(weight, height) {
+    const h = height / 100;
+    return weight / (h * h);
+  }
+
+  function bmiLabel(bmi) {
+    if (bmi < 18.5) return { text: '低体重',   color: '#2196F3' };
+    if (bmi < 25.0) return { text: '普通体重', color: '#43a047' };
+    if (bmi < 30.0) return { text: '肥満(1度)', color: '#fb8c00' };
+    return              { text: '肥満(2度以上)', color: '#e53935' };
+  }
+
+  // ── 全体レンダリング ──────────────────────────────
+  function render() {
+    const records = getRecords();
+    renderChart(records);
+    renderStats(records);
+    renderList(records);
+    renderBMI(records);
+  }
+
+  // ── グラフ ────────────────────────────────────────
+  function renderChart(records) {
+    const labels  = records.map(r => r.date);
+    const weights = records.map(r => r.weight);
+
+    if (chart) {
+      chart.data.labels  = labels;
+      chart.data.datasets[0].data = weights;
+      chart.update();
+      return;
+    }
+
+    const ctx = document.getElementById('weightChart').getContext('2d');
+    chart = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels,
+        datasets: [{
+          label: '体重 (kg)',
+          data: weights,
+          borderColor: '#1565C0',
+          backgroundColor: 'rgba(21,101,192,0.08)',
+          pointBackgroundColor: '#1565C0',
+          pointRadius: 5,
+          tension: 0.3,
+          fill: true,
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { ticks: { maxRotation: 45, font: { size: 11 } } },
+          y: {
+            ticks: { callback: v => v + ' kg', font: { size: 11 } },
+            grace: '5%',
+          }
+        }
+      }
+    });
+  }
+
+  // ── 統計 ─────────────────────────────────────────
+  function renderStats(records) {
+    if (records.length === 0) {
+      ['stat-latest','stat-min','stat-max','stat-avg'].forEach(id => {
+        document.getElementById(id).textContent = '--';
+      });
+      document.getElementById('stat-count').textContent = '0';
+      return;
+    }
+    const weights = records.map(r => r.weight);
+    const fmt = v => v.toFixed(1) + ' kg';
+    document.getElementById('stat-latest').textContent = fmt(weights[weights.length - 1]);
+    document.getElementById('stat-min').textContent    = fmt(Math.min(...weights));
+    document.getElementById('stat-max').textContent    = fmt(Math.max(...weights));
+    document.getElementById('stat-avg').textContent    = fmt(weights.reduce((a,b)=>a+b,0)/weights.length);
+    document.getElementById('stat-count').textContent  = records.length + ' 件';
+  }
+
+  // ── 一覧 ─────────────────────────────────────────
+  function renderList(records) {
+    const el = document.getElementById('record-list');
+    if (records.length === 0) {
+      el.innerHTML = '<div class="empty-msg">まだ記録がありません</div>';
+      return;
+    }
+    const reversed = [...records].reverse();
+    el.innerHTML = reversed.map((r, i) => {
+      const prev = reversed[i + 1];
+      let diffHtml = '';
+      if (prev) {
+        const d = r.weight - prev.weight;
+        const sign = d > 0 ? '+' : '';
+        const cls  = d > 0 ? 'diff-up' : d < 0 ? 'diff-down' : '';
+        diffHtml = `<span class="diff ${cls}">${sign}${d.toFixed(1)}</span>`;
+      }
+      return `
+        <div class="record-item">
+          <span class="date">${r.date}</span>
+          <span class="weight">${r.weight.toFixed(1)} kg ${diffHtml}</span>
+          <button class="btn-del" onclick="deleteRecord('${r.date}')">削除</button>
+        </div>`;
+    }).join('');
+  }
+
+  // ── BMI表示 ───────────────────────────────────────
+  function renderBMI(records) {
+    const h = parseFloat(localStorage.getItem(HEIGHT_KEY));
+    const bmiEl = document.getElementById('bmi-display');
+    if (!h || records.length === 0) { bmiEl.style.display = 'none'; return; }
+
+    const latest = records[records.length - 1].weight;
+    const bmi    = calcBMI(latest, h);
+    const info   = bmiLabel(bmi);
+
+    document.getElementById('bmi-value').textContent      = bmi.toFixed(1);
+    const labelEl = document.getElementById('bmi-label');
+    labelEl.textContent  = info.text;
+    labelEl.style.color  = info.color;
+    bmiEl.style.display  = 'block';
+  }
+
+  init();
+</script>
+</body>
+</html>
