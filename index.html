@@ -194,8 +194,9 @@
       <input type="number" id="m-amount" placeholder="量 (g)" min="1" max="9999" step="1" oninput="recalcMealCal()">
       <input type="number" id="m-cal" placeholder="カロリー (kcal)" min="0" max="9999" step="1">
     </div>
-    <button class="btn" onclick="addMeal()" style="width:100%;">追加</button>
-    <p style="margin-top:8px; font-size:0.78rem; color:#aaa;">※ 食品名を入力すると候補が表示されます。量(g)を変えると自動計算します。</p>
+    <div id="food-match-hint" style="display:none; margin-top:6px; font-size:0.8rem; padding:6px 10px; background:#e8f5e9; border-radius:6px; color:#2e7d32;"></div>
+    <button class="btn" onclick="addMeal()" style="width:100%; margin-top:10px;">追加</button>
+    <p style="margin-top:8px; font-size:0.78rem; color:#aaa;">※ 入力すると自動でカロリーを計算します。量(g)を変えると再計算します。別の候補は↓ドロップダウンから選択できます。</p>
   </div>
 
   <div class="card">
@@ -373,16 +374,31 @@ function saveSettings(){
 function getMeals() { return JSON.parse(localStorage.getItem(K.meal)||'[]'); }
 function setMeals(d) { localStorage.setItem(K.meal,JSON.stringify(d)); }
 
-// 食品検索
+// 食品検索・自動入力
 function onFoodInput() {
-  _selectedFood=null; document.getElementById('m-amount').value='';
   const q=document.getElementById('m-name').value.trim();
   const dd=document.getElementById('food-dropdown');
-  if(!q){dd.style.display='none';return;}
-  const hits=FOOD_DB.filter(f=>f.name.includes(q)||q.split('').every(c=>f.name.includes(c))).slice(0,8);
-  if(!hits.length){dd.style.display='none';return;}
-  dd.innerHTML=hits.map(f=>`<li onmousedown="selectFood(${FOOD_DB.indexOf(f)})">${f.name}<span class="kcal-hint">${f.cal100} kcal/100g　目安 ${Math.round(f.cal100*f.unit/100)} kcal/${f.unit}g</span></li>`).join('');
-  dd.style.display='block';
+  const hint=document.getElementById('food-match-hint');
+  if(!q){ dd.style.display='none'; hint.style.display='none'; _selectedFood=null; return; }
+
+  const hits=FOOD_DB.filter(f=>f.name.includes(q)||q.split('').every(c=>f.name.includes(c)));
+  if(!hits.length){ dd.style.display='none'; hint.style.display='none'; _selectedFood=null; return; }
+
+  // 最上位候補を自動入力
+  const best=hits[0];
+  _selectedFood=best;
+  document.getElementById('m-amount').value=best.unit;
+  document.getElementById('m-cal').value=Math.round(best.cal100*best.unit/100);
+  hint.textContent=`「${best.name}」として自動入力（${best.unit}g → ${Math.round(best.cal100*best.unit/100)} kcal）`;
+  hint.style.display='block';
+
+  // 複数候補があればドロップダウンも表示
+  if(hits.length>1){
+    dd.innerHTML=hits.slice(0,8).map(f=>`<li onmousedown="selectFood(${FOOD_DB.indexOf(f)})">${f.name}<span class="kcal-hint">${f.cal100} kcal/100g　${Math.round(f.cal100*f.unit/100)} kcal/${f.unit}g</span></li>`).join('');
+    dd.style.display='block';
+  } else {
+    dd.style.display='none';
+  }
 }
 function selectFood(idx){
   _selectedFood=FOOD_DB[idx];
@@ -390,12 +406,19 @@ function selectFood(idx){
   document.getElementById('m-amount').value=_selectedFood.unit;
   document.getElementById('m-cal').value=Math.round(_selectedFood.cal100*_selectedFood.unit/100);
   document.getElementById('food-dropdown').style.display='none';
+  const hint=document.getElementById('food-match-hint');
+  hint.textContent=`「${_selectedFood.name}」を選択（${_selectedFood.unit}g → ${Math.round(_selectedFood.cal100*_selectedFood.unit/100)} kcal）`;
+  hint.style.display='block';
 }
 function closeFoodDropdown(){setTimeout(()=>document.getElementById('food-dropdown').style.display='none',150);}
 function recalcMealCal(){
   if(!_selectedFood) return;
   const g=parseFloat(document.getElementById('m-amount').value);
-  if(!isNaN(g)&&g>0) document.getElementById('m-cal').value=Math.round(_selectedFood.cal100*g/100);
+  if(!isNaN(g)&&g>0){
+    const cal=Math.round(_selectedFood.cal100*g/100);
+    document.getElementById('m-cal').value=cal;
+    document.getElementById('food-match-hint').textContent=`「${_selectedFood.name}」（${g}g → ${cal} kcal）`;
+  }
 }
 
 function addMeal(){
